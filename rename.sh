@@ -47,4 +47,4 @@ fi
 
 echo "Renamed to ${NAME} (${PKG}, ${APP_ID}, iOS ${IOS_ID}). Then run:"
 echo "  flutter pub get && dart format lib test integration_test && flutter analyze && flutter test"
-echo "Fill in LICENSE ([YEAR] [COPYRIGHT HOLDER]) and delete this script when done."
+echo "Update the copyright line in LICENSE for your project and delete this script when done."
