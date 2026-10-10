@@ -1,0 +1,36 @@
+name: Android native (skip)
+
+# Required-status-check workaround: once android-native.yml's "native" job is a
+# required check on `main`, a PR whose files don't match that workflow's `paths`
+# (a docs-only PR, for example) would block forever because the real check never
+# runs. This job has the same name and passes immediately when none of those
+# paths changed. See GitHub's documented pattern:
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#example-including-paths
+
+on:
+  pull_request:
+    paths-ignore:
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'android/**'
+      - 'integration_test/**'
+      - 'lib/main.dart'
+      - 'lib/services/reminder_scheduler.dart'
+      - '.github/workflows/android-native.yml'
+      - '.github/scripts/**'
+
+concurrency:
+  group: android-native-skip-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege for the GITHUB_TOKEN; jobs that need more declare it themselves.
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - run: echo "No Android-native-affecting files changed; skipping the real build/emulator job."

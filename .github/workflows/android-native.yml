@@ -1,0 +1,79 @@
+name: Android native
+
+# Real native Android evidence that ci.yml (Dart-only) can't produce: a Gradle
+# `flutter build apk`, then integration_test/ and a reboot check on a booted,
+# KVM-accelerated emulator. The check name is "native"; if you make it a
+# required status check, keep android-native-skip.yml so docs-only PRs still
+# report it.
+
+on:
+  pull_request:
+    paths:
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'android/**'
+      - 'integration_test/**'
+      - 'lib/main.dart'
+      - 'lib/services/reminder_scheduler.dart'
+      - '.github/workflows/android-native.yml'
+      - '.github/scripts/**'
+  workflow_dispatch:
+
+# Least privilege for the GITHUB_TOKEN; no step in this job uses it.
+permissions:
+  contents: read
+
+concurrency:
+  group: android-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Native debug build
+        run: flutter build apk --debug
+
+      # A second debug APK whose entry point schedules one reminder, for
+      # reboot-reminder-check.sh. Copied aside because `flutter test` below
+      # rebuilds app-debug.apk.
+      - name: Build reboot probe APK
+        run: |
+          flutter build apk --debug -t integration_test/reboot_probe_main.dart
+          cp build/app/outputs/flutter-apk/app-debug.apk build/reboot-probe.apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: integration_test on emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          # Reboots the emulator, so it runs last.
+          script: |
+            .github/scripts/run-integration-tests.sh
+            .github/scripts/reboot-reminder-check.sh build/reboot-probe.apk
